@@ -1,0 +1,778 @@
+<title>Paso a Paso</title>
+<meta name="description" content="Simulación del MVP de una app que cuenta pasos sobre un mapa y los convierte en monedas canjeables.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: teléfono simulado a la izquierda (el MVP), panel de simulador y reglas a la derecha; se apilan en móvil. */
+:root {
+  --bg: #e9eeeb;
+  --panel: #ffffff;
+  --panel-2: #f3f6f4;
+  --ink: #18241f;
+  --muted: #5b6b64;
+  --line: #d5ddd8;
+  --accent: #0d7a68;
+  --accent-soft: #d3ece6;
+  --on-accent: #ffffff;
+  --coin: #e3a10f;
+  --coin-deep: #a86f00;
+  --coin-soft: #fbefcf;
+  --gem: #7b5ce0;
+  --frame: #121816;
+  /* mapa */
+  --land: #e4e9e2;
+  --block: #d7ddd4;
+  --bldg: #c6cfc3;
+  --park: #b6d9ab;
+  --water: #a5cfe5;
+  --road: #ffffff;
+  --road-edge: #c9d2c6;
+  --label: #6d7b74;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1413; --panel: #172120; --panel-2: #1d2826; --ink: #e2ebe7; --muted: #93a49d; --line: #2b3835;
+    --accent: #3cc4a9; --accent-soft: #173b35; --on-accent: #06201b;
+    --coin: #f2b631; --coin-deep: #c78a10; --coin-soft: #3a2f12; --gem: #a38cf5; --frame: #050807;
+    --land: #182120; --block: #1f2a28; --bldg: #283633; --park: #1d3a29; --water: #15354a;
+    --road: #33413d; --road-edge: #222d2a; --label: #8a9a94;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1413; --panel: #172120; --panel-2: #1d2826; --ink: #e2ebe7; --muted: #93a49d; --line: #2b3835;
+  --accent: #3cc4a9; --accent-soft: #173b35; --on-accent: #06201b;
+  --coin: #f2b631; --coin-deep: #c78a10; --coin-soft: #3a2f12; --gem: #a38cf5; --frame: #050807;
+  --land: #182120; --block: #1f2a28; --bldg: #283633; --park: #1d3a29; --water: #15354a;
+  --road: #33413d; --road-edge: #222d2a; --label: #8a9a94;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-inline: 16px; padding-block: 28px 40px;
+}
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 40px; align-items: start;
+}
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); justify-items: center; } }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+/* ---------- Teléfono ---------- */
+.phone {
+  width: 100%; max-width: 400px; height: 800px; max-height: calc(100vh - 40px); min-height: 640px;
+  background: var(--panel); border: 10px solid var(--frame); border-radius: 46px;
+  display: flex; flex-direction: column; overflow: hidden; position: relative;
+  box-shadow: 0 30px 60px -30px rgba(0,0,0,.45);
+}
+.status {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 22px 4px; font-size: 12px; font-weight: 600;
+}
+.status .notch { width: 90px; height: 22px; background: var(--frame); border-radius: 12px; }
+.appbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 10px; gap: 10px; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 21px; letter-spacing: -.02em; }
+.brand span { color: var(--accent); }
+.wallet {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 6px;
+  background: var(--coin-soft); border-radius: 999px; font-weight: 700;
+}
+.wallet.bump { animation: bump .35s ease; }
+@keyframes bump { 50% { transform: scale(1.12); } }
+.coin-ico {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, #fff6 0 18%, transparent 19%), var(--coin);
+  box-shadow: inset 0 0 0 2px var(--coin-deep);
+}
+
+.screen { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mapbox { flex: 1; min-height: 0; position: relative; background: var(--land); }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.hud {
+  position: absolute; left: 12px; right: 12px; top: 10px;
+  display: flex; gap: 10px; align-items: center;
+  background: var(--panel); border-radius: 18px; padding: 10px 14px;
+  box-shadow: 0 6px 20px -10px rgba(0,0,0,.4);
+}
+.ring { width: 64px; height: 64px; flex: none; position: relative; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.hud-main { min-width: 0; flex: 1; }
+.steps-big { font-family: var(--font-display); font-weight: 800; font-size: 32px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.steps-sub { color: var(--muted); font-size: 12px; }
+.hud-stats { display: flex; gap: 12px; margin-top: 4px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.hud-stats b { color: var(--ink); font-weight: 600; }
+
+.next-coin {
+  position: absolute; left: 12px; bottom: 12px; right: 92px;
+  background: var(--panel); border-radius: 14px; padding: 8px 12px; font-size: 12px;
+  box-shadow: 0 6px 20px -10px rgba(0,0,0,.4);
+}
+.bar { height: 6px; border-radius: 3px; background: var(--line); margin-top: 5px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--coin); width: 0; transition: width .2s linear; }
+
+.dpad {
+  position: absolute; right: 10px; bottom: 10px; width: 74px; height: 74px;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+}
+.dpad button {
+  border: 0; background: var(--panel); border-radius: 8px; font-size: 13px; line-height: 1;
+  box-shadow: 0 3px 10px -5px rgba(0,0,0,.4); padding: 0;
+}
+.dpad button.on { background: var(--accent); color: var(--on-accent); }
+.dpad .u { grid-area: 1/2; } .dpad .l { grid-area: 2/1; } .dpad .r { grid-area: 2/3; } .dpad .d { grid-area: 3/2; }
+
+.walkbar { display: flex; gap: 10px; padding: 12px 14px; align-items: center; border-top: 1px solid var(--line); }
+.walk {
+  flex: 1; border: 0; border-radius: 14px; padding: 12px; font-weight: 700; font-size: 16px;
+  background: var(--accent); color: var(--on-accent);
+}
+.walk.paused { background: var(--panel-2); color: var(--ink); box-shadow: inset 0 0 0 2px var(--accent); }
+.cadence { font-size: 12px; color: var(--muted); text-align: right; min-width: 70px; }
+.cadence b { display: block; color: var(--ink); font-size: 15px; }
+
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); padding: 4px 6px 12px; }
+.tabs button { border: 0; background: none; padding: 8px 0 2px; font-size: 12px; font-weight: 600; color: var(--muted); display: grid; justify-items: center; gap: 2px; }
+.tabs button svg { width: 22px; height: 22px; }
+.tabs button[aria-selected="true"] { color: var(--accent); }
+
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; }
+.scroll h2 { font-family: var(--font-display); font-weight: 800; font-size: 22px; margin: 6px 0 2px; letter-spacing: -.01em; }
+.scroll .lead { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.reward {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.reward .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; color: var(--accent); }
+.reward h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.reward p { margin: 0; font-size: 12px; color: var(--muted); }
+.redeem {
+  border: 0; border-radius: 10px; padding: 7px 10px; font-weight: 700; font-size: 13px;
+  background: var(--coin); color: #2a1c00; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap;
+}
+.redeem:disabled { background: var(--panel-2); color: var(--muted); cursor: not-allowed; }
+.vouchers { margin-top: 18px; }
+.voucher {
+  border: 2px dashed var(--accent); border-radius: 12px; padding: 10px 12px; margin-top: 8px;
+  display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 13px;
+}
+.voucher code { font-family: var(--font-data); font-weight: 700; color: var(--accent); }
+
+.log { list-style: none; margin: 0; padding: 0; }
+.log li { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: baseline; }
+.log .t { color: var(--muted); font-family: var(--font-data); font-size: 11px; }
+.log .c { font-family: var(--font-data); font-weight: 700; color: var(--coin-deep); }
+.log .c.neg { color: var(--muted); }
+.week { display: flex; align-items: flex-end; gap: 8px; height: 110px; margin: 6px 0 4px; }
+.week div { flex: 1; display: grid; gap: 4px; justify-items: center; height: 100%; align-content: end; font-size: 11px; color: var(--muted); }
+.week span { width: 100%; border-radius: 6px 6px 2px 2px; background: var(--accent-soft); }
+.week .today span { background: var(--accent); }
+.week { position: relative; }
+.week .goal-line { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--coin); height: 0; pointer-events: none; }
+
+.toast {
+  position: absolute; left: 14px; right: 14px; bottom: 80px; z-index: 5;
+  background: var(--ink); color: var(--panel); border-radius: 14px; padding: 10px 14px; font-size: 13px; font-weight: 600;
+  display: flex; gap: 10px; align-items: center;
+  transition: opacity .25s, transform .25s; opacity: 0; transform: translateY(8px); pointer-events: none;
+}
+.toast.show { opacity: 1; transform: none; }
+
+/* ---------- Panel lateral ---------- */
+.side { min-width: 0; display: grid; gap: 22px; width: 100%; max-width: 620px; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.side h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 5vw, 52px); line-height: 1; letter-spacing: -.03em; margin: 6px 0 10px; text-wrap: balance; }
+.side h1 em { font-style: normal; color: var(--coin-deep); }
+.side > header p { margin: 0; color: var(--muted); max-width: 58ch; }
+.card { background: var(--panel); border-radius: 18px; padding: 18px 20px; border: 1px solid var(--line); }
+.card h2 { font-family: var(--font-display); font-size: 18px; font-weight: 800; margin: 0 0 12px; }
+.ctrls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; background: var(--panel-2); border-radius: 10px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+.btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 10px; padding: 7px 12px; font-weight: 600; font-size: 13px; }
+.hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.rules { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.rules li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; align-items: baseline; font-size: 14px; }
+.rules .r { font-family: var(--font-data); font-weight: 700; color: var(--coin-deep); font-size: 13px; }
+.mvp { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+@media (max-width: 520px) { .mvp { grid-template-columns: 1fr; } }
+.mvp li::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+.mvp.out li::before { content: "– "; color: var(--muted); }
+.mvp.out { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .wallet.bump { animation: none; } .toast { transition: none; } }
+</style>
+
+<div class="wrap">
+  <!-- ================= TELÉFONO ================= -->
+  <div class="phone" id="phone">
+    <div class="status"><span class="num" id="clock">09:05</span><span class="notch"></span><span>5G ▮▮▮</span></div>
+    <div class="appbar">
+      <div class="brand">Paso<span>a</span>Paso</div>
+      <div class="wallet" id="wallet"><span class="coin-ico"></span><span class="num" id="coins">0</span></div>
+    </div>
+
+    <div class="screen">
+      <!-- MAPA -->
+      <section class="view" id="v-map">
+        <div class="mapbox" id="mapbox">
+          <canvas id="map" aria-label="Mapa del barrio con tu recorrido y monedas"></canvas>
+          <div class="hud">
+            <div class="ring">
+              <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--line)" stroke-width="7"/>
+                <circle id="ringArc" cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="169.6"/></svg>
+              <div class="pct num" id="pct">0%</div>
+            </div>
+            <div class="hud-main">
+              <div class="steps-big" id="steps">0</div>
+              <div class="steps-sub">pasos hoy · meta <span class="num">8.000</span></div>
+              <div class="hud-stats"><span><b class="num" id="km">0,00</b> km</span><span><b class="num" id="kcal">0</b> kcal</span><span><b class="num" id="mins">0</b> min activo</span></div>
+            </div>
+          </div>
+          <div class="next-coin">
+            <div><span id="nextTxt">Faltan 100 pasos para tu próxima moneda</span></div>
+            <div class="bar"><i id="nextBar"></i></div>
+          </div>
+          <div class="dpad" aria-label="Elegir el próximo giro">
+            <button class="u" data-d="0,-1" aria-label="Girar al norte">▲</button>
+            <button class="l" data-d="-1,0" aria-label="Girar al oeste">◀</button>
+            <button class="r" data-d="1,0" aria-label="Girar al este">▶</button>
+            <button class="d" data-d="0,1" aria-label="Girar al sur">▼</button>
+          </div>
+        </div>
+        <div class="walkbar">
+          <button class="walk" id="walkBtn">Pausar caminata</button>
+          <div class="cadence"><b class="num" id="cad">112</b>pasos/min</div>
+        </div>
+      </section>
+
+      <!-- PREMIOS -->
+      <section class="view" id="v-shop" hidden>
+        <div class="scroll">
+          <h2>Canjea tus monedas</h2>
+          <p class="lead">Premios de comercios del barrio (ejemplos para el MVP).</p>
+          <div id="shop"></div>
+          <div class="vouchers" id="vouchers"></div>
+        </div>
+      </section>
+
+      <!-- ACTIVIDAD -->
+      <section class="view" id="v-log" hidden>
+        <div class="scroll">
+          <h2>Tu semana</h2>
+          <p class="lead">Pasos por día. La línea marca la meta de 8.000.</p>
+          <div class="week" id="week"></div>
+          <h2 style="font-size:18px;margin-top:18px">Movimientos de monedas</h2>
+          <ul class="log" id="log"></ul>
+        </div>
+      </section>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-v="v-map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>Mapa</button>
+      <button role="tab" aria-selected="false" data-v="v-shop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-4-6-1.5S10 8 12 8Zm0 0c2-4 6-4 6-1.5S14 8 12 8Z"/></svg>Premios</button>
+      <button role="tab" aria-selected="false" data-v="v-log">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Actividad</button>
+    </nav>
+  </div>
+
+  <!-- ================= PANEL LATERAL ================= -->
+  <div class="side">
+    <header>
+      <div class="eyebrow">Prototipo MVP · simulación</div>
+      <h1>Camina el barrio, gana <em>monedas</em>.</h1>
+      <p>El teléfono de la izquierda simula la app: el avatar recorre las calles, el podómetro cuenta pasos y cada 100 pasos cae una moneda. No hay GPS, sensores ni servidores conectados; todo ocurre en esta página.</p>
+    </header>
+
+    <section class="card">
+      <h2>Simulador</h2>
+      <div class="ctrls">
+        <span style="font-size:13px;color:var(--muted)">Velocidad</span>
+        <div class="seg" id="speed">
+          <button aria-pressed="false" data-m="10">×10</button>
+          <button aria-pressed="true" data-m="30">×30</button>
+          <button aria-pressed="false" data-m="90">×90</button>
+        </div>
+        <button class="btn" id="add1000">+1.000 pasos</button>
+        <button class="btn" id="reset">Empezar el día de cero</button>
+      </div>
+      <p class="hint">Con las flechas del mapa (o las del teclado) eliges el giro en el próximo cruce. Si no eliges, el avatar pasea solo.</p>
+    </section>
+
+    <section class="card">
+      <h2>Cómo se ganan monedas</h2>
+      <ul class="rules">
+        <li><span class="r">+1</span><span>Cada 100 pasos contados.</span></li>
+        <li><span class="r">+5</span><span>Recoger una moneda dorada del mapa (aparecen en las calles).</span></li>
+        <li><span class="r">+25</span><span>Recoger una gema morada. Son raras.</span></li>
+        <li><span class="r">+15</span><span>Primera visita del día a un punto de interés (Plaza Mayor, Mercado, Parque del Norte, Biblioteca).</span></li>
+        <li><span class="r">+10 / +40</span><span>Llegar a 5.000 pasos y completar la meta diaria de 8.000.</span></li>
+      </ul>
+      <p class="hint">Conversión usada: 1 paso = 0,75 m, ritmo de 1,4 m/s y 0,04 kcal por paso.</p>
+    </section>
+
+    <section class="card">
+      <h2>Qué entra en este MVP</h2>
+      <ul class="mvp">
+        <li>Contador de pasos y meta diaria</li>
+        <li>Mapa con recorrido dibujado</li>
+        <li>Monedas por pasos y por exploración</li>
+        <li>Monedero y canje de premios</li>
+        <li>Historial semanal y de monedas</li>
+        <li>Vales con código de canje</li>
+      </ul>
+      <h2 style="margin-top:16px">Para la siguiente versión</h2>
+      <ul class="mvp out">
+        <li>Podómetro real (sensores del móvil)</li>
+        <li>GPS y mapa real</li>
+        <li>Cuentas de usuario y servidor</li>
+        <li>Antitrampas (velocidad, vehículo)</li>
+        <li>Panel para comercios</li>
+        <li>Retos con amigos</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- Constantes del mundo ----------
+  const G = 160, N = 15, W = G * N;          // cuadras de 160 px, 15×15
+  const M_PER_PX = 0.4, STEP_M = 0.75, WALK_MS = 1.4, KCAL_STEP = 0.04;
+  const GOAL = 8000;
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const rng = (seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; })(20261009);
+
+  const STREETS_V = ["C. del Olmo","Av. de la Sierra","C. Lavanderas","C. del Pozo","C. Real","Av. Central","C. de la Fuente","C. Tejares","C. del Molino","Av. del Río","C. Arenal","C. Alfareros","C. de la Luna","C. Cedros","C. Mirador","C. del Sol"];
+  const STREETS_H = ["Ronda Norte","C. Herreros","C. San Roque","C. Escuelas","C. Mayor","Gran Vía","C. Hortelanos","C. Ancha","C. del Cuartel","Paseo del Prado","C. Huertas","C. Campanas","C. Postas","C. Carmen","C. Robles","Ronda Sur"];
+
+  // Tipos de manzana
+  const blocks = [];
+  for (let by = 0; by < N; by++) for (let bx = 0; bx < N; bx++) {
+    const r = rng();
+    blocks.push({ bx, by, type: r < 0.13 ? "park" : r < 0.18 ? "plaza" : "city", seed: rng() });
+  }
+  const POIS = [
+    { name: "Plaza Mayor", bx: 7, by: 7 },
+    { name: "Mercado", bx: 4, by: 9 },
+    { name: "Parque del Norte", bx: 9, by: 3 },
+    { name: "Biblioteca", bx: 11, by: 10 },
+  ];
+  POIS.forEach(p => { blocks[p.by * N + p.bx].type = p.name === "Parque del Norte" ? "park" : "plaza"; p.x = (p.bx + .5) * G; p.y = (p.by + .5) * G; });
+
+  // ---------- Estado ----------
+  const S = {
+    steps: 0, coins: 0, stepCoins: 0, activeSec: 0, clock: 9 * 3600 + 5 * 60,
+    walking: true, mult: 30,
+    from: { i: 7, j: 8 }, dir: { dx: 1, dy: 0 }, t: 0, queued: null,
+    trail: [], items: [], floats: [], visited: new Set(), milestones: new Set(),
+    log: [], vouchers: [],
+  };
+  const week = [6420, 9105, 7380, 4210, 8650, 10230]; // L–S de ejemplo; D es hoy
+
+  // ---------- Colores del tema ----------
+  let C = {};
+  const mapCanvas = document.createElement("canvas");
+  mapCanvas.width = W; mapCanvas.height = W;
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    ["land","block","bldg","park","water","road","road-edge","label","accent","coin","coin-deep","gem","panel","ink"].forEach(k => C[k] = cs.getPropertyValue("--" + k).trim());
+    drawMap();
+  }
+
+  function drawMap() {
+    const g = mapCanvas.getContext("2d");
+    const r = (s => () => { s = (s * 16807) % 2147483647; return s / 2147483647; });
+    g.fillStyle = C.land; g.fillRect(0, 0, W, W);
+    // calles (bordes)
+    const roadW = i => i % 5 === 0 ? 30 : 20;
+    for (let k = 0; k <= N; k++) {
+      g.fillStyle = C["road-edge"];
+      g.fillRect(k * G - roadW(k) / 2 - 2, 0, roadW(k) + 4, W);
+      g.fillRect(0, k * G - roadW(k) / 2 - 2, W, roadW(k) + 4);
+    }
+    // manzanas
+    for (const b of blocks) {
+      const x0 = b.bx * G, y0 = b.by * G;
+      const pad = 18, x = x0 + pad, y = y0 + pad, s = G - pad * 2;
+      const rr = r(Math.floor(b.seed * 1e9) + 1);
+      if (b.type === "park") {
+        g.fillStyle = C.park; roundRect(g, x, y, s, s, 10); g.fill();
+        if (rr() < .5) { g.fillStyle = C.water; g.beginPath(); g.ellipse(x + s * .55, y + s * .5, s * .26, s * .17, rr(), 0, 7); g.fill(); }
+        g.fillStyle = C.bldg; g.globalAlpha = .35;
+        for (let k = 0; k < 9; k++) { g.beginPath(); g.arc(x + 12 + rr() * (s - 24), y + 12 + rr() * (s - 24), 5 + rr() * 5, 0, 7); g.fill(); }
+        g.globalAlpha = 1;
+      } else if (b.type === "plaza") {
+        g.fillStyle = C.block; roundRect(g, x, y, s, s, 10); g.fill();
+        g.strokeStyle = C["road-edge"]; g.lineWidth = 2;
+        g.beginPath(); g.arc(x + s / 2, y + s / 2, s * .28, 0, 7); g.stroke();
+        g.fillStyle = C.water; g.beginPath(); g.arc(x + s / 2, y + s / 2, 9, 0, 7); g.fill();
+      } else {
+        g.fillStyle = C.block; roundRect(g, x, y, s, s, 6); g.fill();
+        g.fillStyle = C.bldg;
+        const cols = 2 + Math.floor(rr() * 2), rows = 2 + Math.floor(rr() * 2);
+        const cw = (s - 8) / cols, ch = (s - 8) / rows;
+        for (let a = 0; a < cols; a++) for (let c = 0; c < rows; c++) {
+          if (rr() < .15) continue;
+          g.fillRect(x + 4 + a * cw + 3, y + 4 + c * ch + 3, cw - 6 - rr() * 8, ch - 6 - rr() * 8);
+        }
+      }
+    }
+    // calles (calzada)
+    g.fillStyle = C.road;
+    for (let k = 0; k <= N; k++) {
+      g.fillRect(k * G - roadW(k) / 2, 0, roadW(k), W);
+      g.fillRect(0, k * G - roadW(k) / 2, W, roadW(k));
+    }
+    // línea central en avenidas
+    g.strokeStyle = C["road-edge"]; g.lineWidth = 2; g.setLineDash([10, 10]);
+    for (let k = 0; k <= N; k += 5) {
+      g.beginPath(); g.moveTo(k * G, 0); g.lineTo(k * G, W); g.stroke();
+      g.beginPath(); g.moveTo(0, k * G); g.lineTo(W, k * G); g.stroke();
+    }
+    g.setLineDash([]);
+    // nombres de calles
+    g.fillStyle = C.label; g.font = "600 10px Figtree, system-ui, sans-serif"; g.textBaseline = "middle";
+    for (let k = 1; k < N; k++) {
+      for (let seg = 0; seg < N; seg += 4) {
+        g.save(); g.translate(k * G, seg * G + G / 2 + 20); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.fillText(STREETS_V[k], 0, 0); g.restore();
+        g.textAlign = "center"; g.fillText(STREETS_H[k], seg * G + G / 2 + 90, k * G);
+      }
+    }
+  }
+  function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+  // ---------- Monedas del mapa ----------
+  function spawnItem() {
+    const horiz = rng() < .5;
+    const i = Math.floor(rng() * (horiz ? N : N + 1)), j = Math.floor(rng() * (horiz ? N + 1 : N));
+    const off = 30 + rng() * (G - 60);
+    const gem = rng() < .08;
+    S.items.push({ x: horiz ? i * G + off : i * G, y: horiz ? j * G : j * G + off, gem, value: gem ? 25 : 5, ph: rng() * 6 });
+  }
+
+  // ---------- Movimiento ----------
+  const pos = () => ({ x: S.from.i * G + S.dir.dx * S.t, y: S.from.j * G + S.dir.dy * S.t });
+  const valid = (n, d) => { const i = n.i + d.dx, j = n.j + d.dy; return i >= 0 && j >= 0 && i <= N && j <= N; };
+  function chooseDir() {
+    const n = S.from, all = [[1,0],[-1,0],[0,1],[0,-1]].map(([dx, dy]) => ({ dx, dy }));
+    if (S.queued && valid(n, S.queued)) { const d = S.queued; S.queued = null; setDpad(); return d; }
+    const straight = all.find(d => d.dx === S.dir.dx && d.dy === S.dir.dy);
+    if (valid(n, straight) && rng() < .55) return straight;
+    const opts = all.filter(d => valid(n, d) && !(d.dx === -S.dir.dx && d.dy === -S.dir.dy));
+    return opts[Math.floor(rng() * opts.length)] || { dx: -S.dir.dx, dy: -S.dir.dy };
+  }
+
+  function addSteps(n, fromWalk) {
+    const before = S.steps;
+    S.steps += n;
+    const earned = Math.floor(S.steps / 100) - Math.floor(before / 100);
+    if (earned > 0) {
+      S.stepCoins += earned; gain(earned, null, false);
+      if (fromWalk) { const p = pos(); float(p.x, p.y - 18, "+" + earned, C.coin); }
+      else addLog(`${fmt(n)} pasos sincronizados`, earned);
+    }
+    if (S.steps >= 5000 && !S.milestones.has(5000)) { S.milestones.add(5000); gain(10, "Medio camino: 5.000 pasos"); toast("¡5.000 pasos! +10 monedas"); }
+    if (S.steps >= GOAL && !S.milestones.has(GOAL)) { S.milestones.add(GOAL); gain(40, "Meta diaria completada"); toast("Meta diaria cumplida. +40 monedas"); }
+  }
+
+  let pendingStepLog = 0;
+  function gain(n, why, bump = true) {
+    S.coins += n;
+    if (why) addLog(why, n); else pendingStepLog += n;
+    const w = document.getElementById("wallet");
+    w.classList.remove("bump"); void w.offsetWidth; w.classList.add("bump");
+  }
+  function flushStepLog() { // agrupa monedas por pasos en una sola línea por "tramo"
+    if (pendingStepLog) { addLog(`Monedas por pasos`, pendingStepLog); pendingStepLog = 0; }
+  }
+  setInterval(flushStepLog, 6000);
+
+  function addLog(text, coins) {
+    S.log.unshift({ t: fmtClock(S.clock), text, coins });
+    S.log.length = Math.min(S.log.length, 40);
+    renderLog();
+  }
+
+  function float(x, y, text, color) { S.floats.push({ x, y, text, color, life: 1 }); }
+
+  function step(dt) {
+    if (!S.walking) return;
+    const simDt = dt * S.mult;
+    S.clock += simDt; S.activeSec += simDt;
+    let dist = WALK_MS / M_PER_PX * simDt; // px
+    addSteps(dist * M_PER_PX / STEP_M, true);
+    while (dist > 0) {
+      const left = G - S.t;
+      if (dist < left) { S.t += dist; dist = 0; }
+      else {
+        dist -= left; S.from = { i: S.from.i + S.dir.dx, j: S.from.j + S.dir.dy }; S.t = 0;
+        S.dir = chooseDir();
+      }
+    }
+    const p = pos();
+    const last = S.trail[S.trail.length - 1];
+    if (!last || Math.hypot(last.x - p.x, last.y - p.y) > 6) { S.trail.push(p); if (S.trail.length > 900) S.trail.shift(); }
+    // recoger monedas
+    for (let k = S.items.length - 1; k >= 0; k--) {
+      const it = S.items[k];
+      if (Math.hypot(it.x - p.x, it.y - p.y) < 16) {
+        S.items.splice(k, 1); spawnItem();
+        gain(it.value, it.gem ? "Gema recogida" : "Moneda del mapa");
+        float(it.x, it.y - 14, "+" + it.value, it.gem ? C.gem : C.coin);
+      }
+    }
+    // puntos de interés
+    for (const poi of POIS) {
+      if (!S.visited.has(poi.name) && Math.abs(p.x - poi.x) < G * .55 && Math.abs(p.y - poi.y) < G * .55) {
+        S.visited.add(poi.name); gain(15, `Visita: ${poi.name}`); float(poi.x, poi.y - 30, "+15", C.accent);
+        toast(`Has descubierto ${poi.name}. +15 monedas`);
+      }
+    }
+  }
+
+  // ---------- Dibujo ----------
+  const cv = document.getElementById("map"), ctx = cv.getContext("2d");
+  let vw = 0, vh = 0, dpr = 1;
+  new ResizeObserver(() => {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    vw = cv.clientWidth; vh = cv.clientHeight;
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+  }).observe(cv);
+
+  let cam = null, time = 0;
+  function draw() {
+    if (!vw) return;
+    const p = pos();
+    const tx = Math.max(vw / 2 - 40, Math.min(W - vw / 2 + 40, p.x)), ty = Math.max(vh / 2 - 80, Math.min(W - vh / 2 + 80, p.y + 10));
+    cam = cam ? { x: cam.x + (tx - cam.x) * .15, y: cam.y + (ty - cam.y) * .15 } : { x: tx, y: ty };
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = C.land; ctx.fillRect(0, 0, vw, vh);
+    ctx.translate(Math.round(vw / 2 - cam.x), Math.round(vh / 2 - cam.y));
+    ctx.drawImage(mapCanvas, 0, 0);
+
+    // recorrido
+    if (S.trail.length > 1) {
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.strokeStyle = C.accent; ctx.globalAlpha = .55; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(S.trail[0].x, S.trail[0].y);
+      for (const q of S.trail) ctx.lineTo(q.x, q.y);
+      ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+
+    // puntos de interés
+    for (const poi of POIS) {
+      const done = S.visited.has(poi.name);
+      ctx.fillStyle = done ? C.label : C.accent;
+      ctx.beginPath(); ctx.arc(poi.x, poi.y - 16, 11, Math.PI * .85, Math.PI * .15); ctx.lineTo(poi.x, poi.y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = C.panel; ctx.beginPath(); ctx.arc(poi.x, poi.y - 16, 4.5, 0, 7); ctx.fill();
+      ctx.font = "700 11px Figtree, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.lineWidth = 3; ctx.strokeStyle = C.panel; ctx.strokeText(poi.name, poi.x, poi.y + 4);
+      ctx.fillStyle = C.ink; ctx.fillText(poi.name + (done ? " ✓" : ""), poi.x, poi.y + 4);
+    }
+
+    // monedas
+    for (const it of S.items) {
+      const bob = reduceMotion ? 0 : Math.sin(time * 3 + it.ph) * 2.5;
+      const x = it.x, y = it.y + bob;
+      ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(it.x, it.y + 9, 7, 2.5, 0, 0, 7); ctx.fill();
+      if (it.gem) {
+        ctx.fillStyle = C.gem; ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x + 9, y - 2); ctx.lineTo(x, y + 9); ctx.lineTo(x - 9, y - 2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,.45)"; ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x + 4, y - 2); ctx.lineTo(x - 4, y - 2); ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillStyle = C.coin; ctx.beginPath(); ctx.arc(x, y, 8.5, 0, 7); ctx.fill();
+        ctx.strokeStyle = C["coin-deep"]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 7); ctx.stroke();
+      }
+    }
+
+    // avatar
+    const pulse = reduceMotion ? .5 : (time * .8) % 1;
+    if (S.walking) { ctx.fillStyle = C.accent; ctx.globalAlpha = .25 * (1 - pulse); ctx.beginPath(); ctx.arc(p.x, p.y, 10 + pulse * 22, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+    const ang = Math.atan2(S.dir.dy, S.dir.dx);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang);
+    ctx.fillStyle = C.accent; ctx.beginPath(); ctx.moveTo(17, 0); ctx.lineTo(8, -6); ctx.lineTo(8, 6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = C.panel; ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, 7); ctx.fill();
+    ctx.fillStyle = C.accent; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, 7); ctx.fill();
+
+    // textos flotantes
+    ctx.font = "800 15px 'Bricolage Grotesque', system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const f of S.floats) {
+      ctx.globalAlpha = Math.max(0, f.life);
+      ctx.lineWidth = 4; ctx.strokeStyle = C.panel; ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const fmt = n => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  function fmtClock(s) { s = Math.floor(s) % 86400; return String(Math.floor(s / 3600)).padStart(2, "0") + ":" + String(Math.floor(s / 60) % 60).padStart(2, "0"); }
+
+  let lastCoins = -1;
+  function renderHud() {
+    $("steps").textContent = fmt(S.steps);
+    $("km").textContent = (S.steps * STEP_M / 1000).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    $("kcal").textContent = fmt(S.steps * KCAL_STEP);
+    $("mins").textContent = fmt(S.activeSec / 60);
+    $("clock").textContent = fmtClock(S.clock);
+    const pct = Math.min(1, S.steps / GOAL);
+    $("pct").textContent = Math.floor(pct * 100) + "%";
+    $("ringArc").setAttribute("stroke-dashoffset", (169.6 * (1 - pct)).toFixed(1));
+    const rem = 100 - (Math.floor(S.steps) % 100);
+    $("nextTxt").textContent = `Faltan ${rem} pasos para tu próxima moneda`;
+    $("nextBar").style.width = (100 - rem) + "%";
+    $("cad").textContent = S.walking ? "112" : "0";
+    if (S.coins !== lastCoins) { lastCoins = S.coins; $("coins").textContent = fmt(S.coins); renderShop(); }
+  }
+
+  const REWARDS = [
+    { ic: "☕", name: "Café gratis", shop: "Cafetería del Mercado", cost: 120 },
+    { ic: "10%", name: "10 % de descuento", shop: "Tienda de deportes del barrio", cost: 250 },
+    { ic: "🏊", name: "Entrada a la piscina", shop: "Polideportivo municipal", cost: 400 },
+    { ic: "🌳", name: "Plantar un árbol", shop: "Asociación vecinal", cost: 600 },
+  ];
+  function renderShop() {
+    $("shop").innerHTML = REWARDS.map((r, k) => `
+      <div class="reward">
+        <div class="ic">${r.ic}</div>
+        <div><h3>${r.name}</h3><p>${r.shop}</p></div>
+        <button class="redeem" data-k="${k}" ${S.coins < r.cost ? "disabled" : ""}><span class="coin-ico" style="width:16px;height:16px"></span><span class="num">${r.cost}</span></button>
+      </div>`).join("");
+    $("vouchers").innerHTML = S.vouchers.length ? `<h2 style="font-size:18px">Tus vales</h2>` + S.vouchers.map(v =>
+      `<div class="voucher"><span>${v.name}<br><small style="color:var(--muted)">${v.shop}</small></span><code>${v.code}</code></div>`).join("") : "";
+  }
+  $("shop").addEventListener("click", e => {
+    const b = e.target.closest(".redeem"); if (!b || b.disabled) return;
+    const r = REWARDS[+b.dataset.k];
+    S.coins -= r.cost;
+    const code = "PAP-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    S.vouchers.unshift({ ...r, code });
+    addLog(`Canje: ${r.name}`, -r.cost);
+    toast(`Vale listo: ${code}. Enséñalo en caja.`);
+    renderHud(); renderShop();
+  });
+
+  function renderLog() {
+    $("log").innerHTML = S.log.map(l => `<li><span class="t">${l.t}</span><span>${l.text}</span><span class="c ${l.coins < 0 ? "neg" : ""}">${l.coins > 0 ? "+" : ""}${l.coins}</span></li>`).join("");
+  }
+  function renderWeek() {
+    const days = ["L","M","X","J","V","S","D"], vals = [...week, S.steps], max = 11000;
+    $("week").innerHTML = vals.map((v, k) => `<div class="${k === 6 ? "today" : ""}"><span style="height:${Math.max(4, v / max * 85)}px" title="${fmt(v)} pasos"></span>${days[k]}</div>`).join("") + `<i class="goal-line" style="bottom:${GOAL / max * 85 + 20}px"></i>`;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
+
+  // Pestañas
+  document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+    ["v-map","v-shop","v-log"].forEach(v => $(v).hidden = v !== b.dataset.v);
+    if (b.dataset.v === "v-log") { renderWeek(); renderLog(); }
+    if (b.dataset.v === "v-shop") renderShop();
+  }));
+
+  // Caminar / pausar
+  $("walkBtn").addEventListener("click", () => {
+    S.walking = !S.walking;
+    $("walkBtn").textContent = S.walking ? "Pausar caminata" : "Seguir caminando";
+    $("walkBtn").classList.toggle("paused", !S.walking);
+    flushStepLog();
+  });
+
+  // Cruceta y teclado
+  function setDpad() {
+    document.querySelectorAll(".dpad button").forEach(b => {
+      const [dx, dy] = b.dataset.d.split(",").map(Number);
+      b.classList.toggle("on", !!S.queued && S.queued.dx === dx && S.queued.dy === dy);
+    });
+  }
+  function queue(dx, dy) {
+    // girar en el sentido contrario se hace ya, sin esperar al cruce
+    if (dx === -S.dir.dx && dy === -S.dir.dy) { S.from = { i: S.from.i + S.dir.dx, j: S.from.j + S.dir.dy }; S.t = G - S.t; S.dir = { dx, dy }; S.queued = null; }
+    else S.queued = { dx, dy };
+    setDpad();
+  }
+  document.querySelectorAll(".dpad button").forEach(b => b.addEventListener("click", () => { const [dx, dy] = b.dataset.d.split(",").map(Number); queue(dx, dy); }));
+  addEventListener("keydown", e => {
+    const k = { ArrowUp: [0,-1], ArrowDown: [0,1], ArrowLeft: [-1,0], ArrowRight: [1,0] }[e.key];
+    if (k && !$("v-map").hidden && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); queue(...k); }
+  });
+
+  // Simulador
+  $("speed").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    S.mult = +b.dataset.m;
+    $("speed").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  });
+  $("add1000").addEventListener("click", () => { flushStepLog(); addSteps(1000, false); renderWeek(); });
+  $("reset").addEventListener("click", () => {
+    Object.assign(S, { steps: 0, coins: 0, stepCoins: 0, activeSec: 0, clock: 7 * 3600 + 30 * 60, trail: [], floats: [], queued: null, log: [], vouchers: [] });
+    S.visited.clear(); S.milestones.clear(); pendingStepLog = 0;
+    addLog("Nuevo día: contador a cero", 0);
+    renderShop(); renderWeek(); setDpad(); toast("Día reiniciado. ¡A caminar!");
+  });
+
+  // ---------- Estado inicial de ejemplo ----------
+  function seed() {
+    for (let k = 0; k < 28; k++) spawnItem();
+    // recorrido previo de la mañana (ejemplo)
+    const route = [[3,12],[3,10],[5,10],[5,8],[7,8]];
+    for (let k = 0; k < route.length - 1; k++) {
+      const [a, b] = route[k], [c, d] = route[k + 1];
+      for (let s = 0; s <= 20; s++) S.trail.push({ x: (a + (c - a) * s / 20) * G, y: (b + (d - b) * s / 20) * G });
+    }
+    S.visited.add("Mercado");
+    S.steps = 2340; S.activeSec = 21 * 60; S.stepCoins = 23;
+    S.log = [
+      { t: "08:12", text: "Racha de 6 días (ejemplo)", coins: 10 },
+      { t: "08:40", text: "Moneda del mapa", coins: 5 },
+      { t: "08:51", text: "Visita: Mercado", coins: 15 },
+      { t: "09:04", text: "Monedas por pasos", coins: 23 },
+    ].reverse();
+    S.coins = 10 + 5 + 15 + 23 + 95; // + saldo de días anteriores
+    S.log.push({ t: "ayer", text: "Saldo de días anteriores", coins: 95 });
+  }
+
+  // ---------- Bucle ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now; time += dt;
+    step(dt);
+    S.floats.forEach(f => { f.y -= 28 * dt; f.life -= dt * .8; });
+    S.floats = S.floats.filter(f => f.life > 0);
+    draw(); renderHud();
+    requestAnimationFrame(frame);
+  }
+
+  seed();
+  readTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readTheme);
+  new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  if (document.fonts) document.fonts.ready.then(drawMap);
+  renderShop(); renderLog(); renderWeek();
+  requestAnimationFrame(frame);
+})();
+</script>
