@@ -1,0 +1,52 @@
+{
+  "conversacion_id": "conv-001",
+  "protocolo": "M2M-v1",
+  "mensajes": [
+    {
+      "id": 1,
+      "emisor": "sensor-01",
+      "receptor": "servidor-central",
+      "tipo": "saludo",
+      "timestamp": "2026-10-24T10:00:00Z",
+      "contenido": {
+        "mensaje": "HELLO",
+        "estado": "online"
+      }
+    },
+    {
+      "id": 2,
+      "emisor": "servidor-central",
+      "receptor": "sensor-01",
+      "tipo": "confirmacion",
+      "timestamp": "2026-10-24T10:00:01Z",
+      "contenido": {
+        "mensaje": "ACK",
+        "solicitud": "enviar_temperatura"
+      }
+    },
+    {
+      "id": 3,
+      "emisor": "sensor-01",
+      "receptor": "servidor-central",
+      "tipo": "datos",
+      "timestamp": "2026-10-24T10:00:02Z",
+      "contenido": {
+        "temperatura": 23.5,
+        "unidad": "C",
+        "bateria": 87
+      }
+    },
+    {
+      "id": 4,
+      "emisor": "servidor-central",
+      "receptor": "sensor-01",
+      "tipo": "respuesta",
+      "timestamp": "2026-10-24T10:00:03Z",
+      "contenido": {
+        "mensaje": "RECIBIDO",
+        "accion": "dormir",
+        "proxima_lectura_seg": 300
+      }
+    }
+  ]
+}
